@@ -2,9 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { getDb } from "./db.js";
 import { readHistoryEntries } from "./history.js";
 import { searchKnowledge, syncKnowledgeIfNeeded } from "./knowledge.js";
+import { searchSessions, syncSessionsIfNeeded } from "./sessions.js";
 import { memoryForgetSchema, memorySearchSchema, memoryStoreSchema } from "./validators.js";
 import type { MemorySearchResult } from "./types.js";
-import { KNOWLEDGE_PATH } from "./config.js";
+import { KNOWLEDGE_PATH, SESSIONS_PATH } from "./config.js";
 
 const SCORE_MATCH = 10;
 const SCORE_OCCURRENCE = 2;
@@ -17,6 +18,7 @@ const CANDIDATE_MAX = 50;
 const SOURCE_WEIGHT = {
   memory: 1.0,
   knowledge: 0.9,
+  session: 0.75,
   history: 0.6,
 } as const;
 
@@ -27,6 +29,7 @@ const CATEGORY_BONUS = {
   entity: 0.2,
   other: 0,
   knowledge: 0,
+  session: 0.1,
 } as const;
 
 const STRUCTURE_BONUS = {
@@ -34,6 +37,21 @@ const STRUCTURE_BONUS = {
   listItem: 0.4,
   codeBlock: 0.3,
 } as const;
+
+function formatSessionTime(startTime: number, endTime: number): string {
+  if (!startTime && !endTime) return "";
+  const fmt = (ts: number) => new Date(ts).toISOString().replace("T", " ").slice(0, 16);
+  if (startTime && endTime && startTime !== endTime) {
+    // 同一天只显示一次日期
+    const startStr = fmt(startTime);
+    const endStr = fmt(endTime);
+    if (startStr.slice(0, 10) === endStr.slice(0, 10)) {
+      return `${startStr}~${endStr.slice(11)}`;
+    }
+    return `${startStr}~${endStr}`;
+  }
+  return fmt(startTime || endTime);
+}
 
 function scoreText(text: string, query: string): number {
   const haystack = text.toLowerCase();
@@ -186,9 +204,33 @@ export function memorySearch(input: unknown) {
     }));
   }
 
-  const scored = [...dbScored, ...historyScored, ...knowledgeScored]
+  // 会话历史检索
+  let sessionScored: Array<MemorySearchResult & { createdAt: number }> = [];
+  if (SESSIONS_PATH) {
+    syncSessionsIfNeeded(db);
+    const sessionRows = searchSessions(db, parsed.query, candidateLimit);
+    sessionScored = sessionRows.map((row) => {
+      const timeRange = formatSessionTime(row.startTime, row.endTime);
+      const header = [
+        timeRange,
+        row.project ? `project:${row.project}` : "",
+      ].filter(Boolean).join(" | ");
+      return {
+        id: `session:${row.sessionId}:${row.id}`,
+        text: header ? `[${header}]\n${row.snippet}` : row.snippet,
+        category: "session" as const,
+        score: row.score,
+        createdAt: row.updatedAt,
+      };
+    });
+  }
+
+  const scored = [...dbScored, ...historyScored, ...knowledgeScored, ...sessionScored]
     .map((row) => {
-      const source = row.category === "knowledge" ? "knowledge" : row.category === "other" ? "history" : "memory";
+      const source = row.category === "knowledge" ? "knowledge"
+        : row.category === "session" ? "session"
+        : row.category === "other" ? "history"
+        : "memory";
       const boost = importanceScore(row.text, row.category, source);
       return { ...row, score: row.score + boost };
     })

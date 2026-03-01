@@ -4,6 +4,8 @@ export const MAX_LIMIT = Number(process.env.MCP_MEMORY_MAX_LIMIT ?? 20);
 export const CLAUDE_HISTORY_PATH =
   process.env.MCP_MEMORY_CLAUDE_HISTORY_PATH ?? "C:/Users/13357/.claude/history.jsonl";
 export const KNOWLEDGE_PATH = process.env.MCP_MEMORY_KNOWLEDGE_PATH ?? "";
+export const SESSIONS_PATH =
+  process.env.MCP_MEMORY_SESSIONS_PATH ?? "C:/Users/13357/.claude/projects";
 
 export const CHUNK_TOKENS = Number(process.env.MCP_MEMORY_CHUNK_TOKENS ?? 400);
 export const CHUNK_OVERLAP_TOKENS = Number(process.env.MCP_MEMORY_CHUNK_OVERLAP_TOKENS ?? 80);

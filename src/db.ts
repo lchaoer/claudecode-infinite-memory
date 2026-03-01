@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import Database from "better-sqlite3";
-import { DB_PATH, KNOWLEDGE_PATH } from "./config.js";
+import { DB_PATH, KNOWLEDGE_PATH, SESSIONS_PATH } from "./config.js";
 import { initKnowledgeSchema } from "./knowledge.js";
+import { initSessionSchema } from "./sessions.js";
 
 const db = new Database(DB_PATH);
 
@@ -78,6 +79,11 @@ if (missingHash.c > 0) {
 // 知识索引建表（KNOWLEDGE_PATH 非空时）
 if (KNOWLEDGE_PATH) {
   initKnowledgeSchema(db);
+}
+
+// 会话索引建表（SESSIONS_PATH 非空时）
+if (SESSIONS_PATH) {
+  initSessionSchema(db);
 }
 
 export function getDb() {
